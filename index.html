@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pemindai Barcode/QR Code Jarak Jauh</title>
+
+    <script
+      src="https://unpkg.com/html5-qrcode"
+      type="text/javascript"
+    ></script>
+
+    <style>
+      body {
+        font-family: sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 20px;
+        background-color: #f0f4f8;
+      }
+      h1 {
+        color: #333;
+      }
+      #reader {
+        width: 100%;
+        max-width: 500px;
+        border: 2px solid #667eea;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        overflow: hidden;
+      }
+      #result {
+        padding: 15px;
+        border: 1px solid #764ba2;
+        background-color: #fff;
+        color: #333;
+        width: 100%;
+        max-width: 500px;
+        text-align: center;
+        min-height: 50px;
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      }
+      .success-text {
+        color: #4caf50;
+        font-weight: bold;
+      }
+      .error-text {
+        color: #f44336;
+      }
+      .status-text {
+        margin-top: 10px;
+        font-size: 0.9em;
+        color: #2196f3;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Pemindai Jarak Jauh 📱</h1>
+    <div id="reader"></div>
+    <div id="result">Arahkan kamera ke Barcode atau QR Code.</div>
+    <div class="status-text" id="scanStatus">Menunggu pemindaian...</div>
+
+    <script>
+      // *** GANTI DENGAN ALAMAT IP PC ANDA DAN PORT FLASK! ***
+      const SERVER_URL = "http://192.168.1.10:5000";
+      // Contoh: Jika IP PC Anda 192.168.1.10 dan port 5000
+
+      let lastScannedBarcode = null;
+      const scanStatusElement = document.getElementById("scanStatus");
+
+      // Fungsi untuk mengirim barcode ke server
+      async function sendBarcodeToServer(barcode) {
+        scanStatusElement.textContent = "Mengirim barcode ke server...";
+        try {
+          const response = await fetch(`${SERVER_URL}/set_barcode`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ barcode: barcode }),
+          });
+
+          const data = await response.json();
+
+          if (response.ok) {
+            scanStatusElement.textContent = `✅ Barcode dikirim: ${barcode}`;
+            lastScannedBarcode = barcode; // Simpan barcode yang berhasil dikirim
+            // Reset status setelah beberapa saat
+            setTimeout(() => {
+              scanStatusElement.textContent = "Menunggu pemindaian...";
+              lastScannedBarcode = null; // Biarkan barcode yang sama dipindai lagi
+            }, 5000);
+          } else {
+            scanStatusElement.textContent = `❌ Gagal mengirim: ${data.message}`;
+          }
+        } catch (error) {
+          scanStatusElement.textContent = `❌ Error Koneksi: Pastikan server berjalan dan IP benar.`;
+          console.error("Error saat mengirim barcode:", error);
+        }
+      }
+
+      // Fungsi yang akan dipanggil ketika pemindaian berhasil
+      function onScanSuccess(decodedText, decodedResult) {
+        // Logika "satu kali scan dengan barcode yang sama"
+        if (decodedText === lastScannedBarcode) {
+          return; // Abaikan jika barcode sama
+        }
+
+        // Tampilkan hasil
+        document.getElementById("result").innerHTML = `
+                <div class="success-text">Barcode Terdeteksi:</div>
+                ${decodedText}
+            `;
+
+        // Kirim ke server
+        sendBarcodeToServer(decodedText);
+      }
+
+      // Fungsi yang akan dipanggil ketika pemindaian gagal
+      function onScanFailure(error) {
+        // Biarkan error diabaikan agar proses pemindaian berjalan mulus
+      }
+
+      // Inisialisasi Html5QrcodeScanner
+      let html5QrcodeScanner = new Html5QrcodeScanner(
+        "reader",
+        {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          rememberLastUsedCamera: true,
+          supportedScanFormats: [
+            Html5QrcodeSupportedFormats.QR_CODE,
+            Html5QrcodeSupportedFormats.CODE_128,
+            Html5QrcodeSupportedFormats.EAN_13,
+          ],
+        },
+        /* verbose= */ false
+      );
+
+      // Render pemindai
+      html5QrcodeScanner.render(onScanSuccess, onScanFailure);
+    </script>
+  </body>
+</html>
